@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Мої транзакції</title>
+</head>
+<body>
+    <h1>Список транзакцій</h1>
+
+    <div style="border: 1px solid black; padding: 10px; margin-bottom: 20px;">
+        <h3>Мій бюджет</h3>
+        <p>Доходи: {{ total_incomes }}</p>
+        <p>Витрати: {{ total_expences }}</p>
+        <p>Баланс: {{ balance }}</p>
+    </div>
+
+    <form method="GET">
+        <input type="text" name="search" placeholder="Пошук за описом...">
+
+        <select name="category">
+            <option value="">Усі категорії</option>
+            {% for category in categories %}
+                <option value="{{ category.id }}">{{ category.name }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="sort">
+            <option value="">Без сортування</option>
+            <option value="amount">За сумою (зростання)</option>
+            <option value="-amount">За сумою (спадання)</option>
+        </select>
+
+        <button type="submit">Шукати / Фільтрувати</button>
+    </form>
+
+    <ul>
+        {% for transaction in transactions %}
+        <li> Опис: {{ transaction.title }} | Сума: {{ transaction.amount }} | Тип: {{ transaction.get_debit_or_credit_display }} | Категорія: {{ transaction.category }}
+        </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
