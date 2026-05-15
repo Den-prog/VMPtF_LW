@@ -7,6 +7,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
@@ -14,10 +15,12 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+// НОВЕ: Імпорти для роботи з Retrofit
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 
 class MainActivity : AppCompatActivity() {
-
-    // Основний список відео, який зберігається в пам'яті під час роботи програми
     private lateinit var myVideos: MutableList<Video>
     private lateinit var myAdapter: VideoAdapter
 
@@ -43,27 +46,25 @@ class MainActivity : AppCompatActivity() {
         rvVideos.layoutManager = LinearLayoutManager(this)
         tvHeader = findViewById(R.id.textView)
 
-
         val loginName = intent.getStringExtra("USER_NAME") ?: "Денис"
         val loginIsAdmin = intent.getBooleanExtra("IS_ADMIN", false)
 
-
         allUsers = mutableListOf(
-            User(id = 1, name = loginName, isAdmin = loginIsAdmin),
-            User(id = 2, name = "Іван", isAdmin = false),
-            User(id = 3, name = "Марія", isAdmin = false)
+            User(id = 1, name = loginName, role = if (loginIsAdmin) "admin" else "user"),
+            User(id = 2, name = "Костя", role = "user"),
+            User(id = 3, name = "Марія", role = "user")
         )
         activeUser = allUsers[0]
 
-
-        val localVideoUri = "android.resource://" + packageName + "/" + R.raw.test_video_bille_jean
-        myVideos = mutableListOf(
-            Video(id = 1, name = "Michael Jackson - Billie Jean", url = localVideoUri, comments = mutableListOf(), sharedVideos = mutableListOf())
-        )
-
+        // НОВЕ: Обов'язково ініціалізуємо порожній список перед завантаженням з мережі,
+        // щоб програма не впала з помилкою UninitializedPropertyAccessException
+        myVideos = mutableListOf()
 
         setupDeveloperPanel()
 
+        // НОВЕ: Завантажуємо відео з нашого Express сервера замість локальних
+        loadVideosFromServer()
+        loadUsersFromServer()
 
         val videoPickerLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
             if (uri != null) {
@@ -72,19 +73,35 @@ class MainActivity : AppCompatActivity() {
                 val input = android.widget.EditText(this)
                 builder.setView(input)
 
-                builder.setPositiveButton("Зберегти") { dialog, _ ->
+                builder.setPositiveButton("Зберегти") { _, _ ->
                     val customName = input.text.toString()
-                    val fileName = if (customName.isNotBlank()) customName else "Відео без назви"
+                    val fileName = customName.ifBlank { "Відео без назви" }
+
+                    // Створюємо об'єкт відео для відправки на сервер
                     val newVideo = Video(
-                        id = myVideos.size + 1,
+                        id = 0, // Сервер сам згенерує правильний ID
                         name = fileName,
                         url = uri.toString(),
                         comments = mutableListOf(),
-                        sharedVideos = mutableListOf(),
-                        authorId = activeUser.id
+                        sharedvideos = mutableListOf(),
+                        author = activeUser.id
                     )
-                    myVideos.add(newVideo)
-                    updateVideoList()
+
+                    // НОВЕ: Відправляємо нове відео на сервер через Retrofit (POST-запит)
+                    RetrofitClient.instance.addVideo(newVideo).enqueue(object : Callback<Video> {
+                        override fun onResponse(call: Call<Video>, response: Response<Video>) {
+                            if (response.isSuccessful) {
+                                Toast.makeText(this@MainActivity, "Відео успішно завантажено!", Toast.LENGTH_SHORT).show()
+                                loadVideosFromServer() // Оновлюємо список з сервера
+                            } else {
+                                Toast.makeText(this@MainActivity, "Помилка при збереженні", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+
+                        override fun onFailure(call: Call<Video>, t: Throwable) {
+                            Toast.makeText(this@MainActivity, "Помилка мережі: ${t.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    })
                 }
 
                 builder.setNegativeButton("Скасувати") { dialog, _ ->
@@ -99,6 +116,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // НОВЕ: Метод для отримання відео з Express.js (GET-запит)
+    private fun loadVideosFromServer() {
+        RetrofitClient.instance.getVideos().enqueue(object : Callback<List<Video>> {
+            override fun onResponse(call: Call<List<Video>>, response: Response<List<Video>>) {
+                if (response.isSuccessful) {
+                    val videosFromServer = response.body()
+                    if (videosFromServer != null) {
+                        myVideos.clear() // Очищаємо старі дані
+                        myVideos.addAll(videosFromServer) // Додаємо ті, що прийшли з сервера
+                        updateVideoList() // Перемальовуємо екран
+                    }
+                } else {
+                    Toast.makeText(this@MainActivity, "Не вдалося отримати відео", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onFailure(call: Call<List<Video>>, t: Throwable) {
+                Toast.makeText(this@MainActivity, "Помилка з'єднання з сервером", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
 
     private fun setupDeveloperPanel() {
         val spinner: Spinner? = findViewById(R.id.spinnerUserSelect)
@@ -109,51 +147,59 @@ class MainActivity : AppCompatActivity() {
             val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, allUsers.map { it.name })
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             spinner.adapter = adapter
-
+            adminSwitch.isClickable = false
 
             spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     activeUser = allUsers[position]
-                    adminSwitch.isChecked = activeUser.isAdmin
-                    updateVideoList() // Оновлюємо відео під нового юзера
+                    if(activeUser.isAdmin){
+                        adminSwitch.visibility = View.VISIBLE
+                        adminSwitch.isChecked = true
+                    } else {
+                        adminSwitch.visibility = View.GONE
+                        adminSwitch.isChecked = false
+                    }
+                    updateVideoList()
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) {}
             }
-
-
-            adminSwitch.setOnCheckedChangeListener { _, isChecked ->
-                activeUser = activeUser.copy(isAdmin = isChecked)
-
-                val index = allUsers.indexOfFirst { it.id == activeUser.id }
-                if (index != -1) allUsers[index] = activeUser
-
-                updateVideoList()
-            }
         } else {
-
             updateVideoList()
         }
     }
 
-
     private fun updateVideoList() {
         val roleText = if (activeUser.isAdmin) "Адмін" else "Користувач"
-        tvHeader.text = "Відеохостинг | ${activeUser.name} ($roleText)"
+        tvHeader.text = getString(R.string.header_format, activeUser.name, roleText)
 
         val filteredVideos = if (activeUser.isAdmin) {
             myVideos
         } else {
-
-            myVideos.filter { it.id == 1 || it.authorId == activeUser.id || it.sharedVideos.contains(activeUser.id) }.toMutableList()
+            myVideos.filter { it.id == 1 || it.author == activeUser.id || it.sharedvideos.any{shared -> shared.receiverId == activeUser.id} }.toMutableList()
         }
 
-
-        myAdapter = VideoAdapter(filteredVideos.toMutableList(), activeUser.name, activeUser.isAdmin) { position ->
+        myAdapter = VideoAdapter(filteredVideos.toMutableList(), activeUser.name, activeUser.isAdmin, allUsers) { position ->
             val videoToRemove = filteredVideos[position]
             myVideos.remove(videoToRemove)
             updateVideoList()
         }
 
         rvVideos.adapter = myAdapter
+    }
+
+    private fun loadUsersFromServer() {
+        RetrofitClient.instance.getUsers().enqueue(object : Callback<List<User>> {
+            override fun onResponse(call: Call<List<User>>, response: Response<List<User>>) {
+                if (response.isSuccessful) {
+                    val usersFromServer = response.body()
+                    if (usersFromServer != null) {
+                        allUsers.clear()
+                        allUsers.addAll(usersFromServer)
+                        setupDeveloperPanel() 
+                    }
+                }
+            }
+            override fun onFailure(call: Call<List<User>>, t: Throwable) {}
+        })
     }
 }

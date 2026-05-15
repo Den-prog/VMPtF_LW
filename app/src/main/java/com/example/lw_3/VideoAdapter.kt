@@ -1,7 +1,6 @@
 package com.example.lw_3
 
 import android.app.AlertDialog
-import android.text.Editable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,36 +9,34 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.VideoView
+import androidx.core.net.toUri
 import androidx.recyclerview.widget.RecyclerView
-import org.w3c.dom.Text
 
 class VideoAdapter(
     private val videoList: MutableList<Video>,
     private val currentUserName: String,
     private val isAdmin: Boolean,
+    private val allUsers: List<User>,
     private val onVideoDelete: (Int) -> Unit) : RecyclerView.Adapter<VideoAdapter.VideoViewHolder>() {
 
-    private val mockUsers = listOf(
-        User(2, "Іван", false),
-        User(3, "Марія", false),
 
-    )
     class VideoViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val txtVideoTitle: TextView = itemView.findViewById(R.id.txtVideoTitle)
-        val btnLike: Button = itemView.findViewById(R.id.btnLike)
         val btnSendComment: Button = itemView.findViewById(R.id.btnSendComment)
 
         val editTextComment: EditText = itemView.findViewById(R.id.editTextComment)
 
         val tvCommentsList: TextView = itemView.findViewById(R.id.tvCommentsList)
 
-        val VideoPLayer: VideoView = itemView.findViewById(R.id.VideoPlayer)
+        val videoPlayer: VideoView = itemView.findViewById(R.id.VideoPlayer)
 
         val btnShare: Button = itemView.findViewById(R.id.btnShare)
 
         val btnDeleteVideo: Button = itemView.findViewById(R.id.btnDeleteVideo)
 
         val btnClearComments: Button = itemView.findViewById(R.id.btnClearComments)
+
+        val btnLike: Button = itemView.findViewById(R.id.btnLike)
     }
 
     //створення нової порожної картки (XML макет) і передаємо її у ViewHolder
@@ -50,47 +47,61 @@ class VideoAdapter(
 
     //бере порожню картку і наповнює її реальними даними з об'єкта Video
     override fun onBindViewHolder(holder: VideoViewHolder, position: Int) {
-
-
         val currentVideo = videoList[position]
-        holder.tvCommentsList.text = currentVideo.comments.joinToString("\n")
+        holder.tvCommentsList.text = if (currentVideo.comments.isEmpty()) "Немає коментарів" else currentVideo.comments.joinToString("\n") { "${it.author}: ${it.text}" }
         holder.txtVideoTitle.text = currentVideo.name
-        val videoUri = android.net.Uri.parse(currentVideo.url)
 
-        holder.VideoPLayer.setVideoURI(videoUri)
+        val fixedUrl = currentVideo.url.replace("localhost", "10.0.2.2")
+        val videoUri = fixedUrl.toUri()
+
+        holder.videoPlayer.setVideoURI(videoUri)
 
         val mediaController = android.widget.MediaController(holder.itemView.context)
-        mediaController.setAnchorView(holder.VideoPLayer)
-        holder.VideoPLayer.setMediaController(mediaController)
-        holder.VideoPLayer.setOnErrorListener { mp, what, extra ->
+        mediaController.setAnchorView(holder.videoPlayer)
+        holder.videoPlayer.setMediaController(mediaController)
+        holder.videoPlayer.setOnErrorListener { _, _, _ ->
             true
         }
 
-        holder.VideoPLayer.setOnClickListener {
-            if(holder.VideoPLayer.isPlaying){
-                holder.VideoPLayer.pause()
+        holder.videoPlayer.setOnClickListener {
+            if(holder.videoPlayer.isPlaying){
+                holder.videoPlayer.pause()
             }
             else{
-                holder.VideoPLayer.start()
+                holder.videoPlayer.start()
             }
         }
 
-        if(currentVideo.isLiked){
-            holder.btnLike.text = "Прибрати лайк"
-        }
-        else{
-            holder.btnLike.text = "Поставити лайк"
-        }
+ 
+        // Відображаємо поточну кількість лайків на кнопці
+        holder.btnLike.text = if (currentVideo.isLiked) "❤️ ${currentVideo.likes}" else "🤍 ${currentVideo.likes}"
+
         holder.btnLike.setOnClickListener {
-            currentVideo.isLiked = !currentVideo.isLiked
-            if(currentVideo.isLiked){
-                holder.btnLike.text = "Прибрати лайк"
-            }
-            else{
-                holder.btnLike.text = "Поставити лайк"
-            }
+            // Визначаємо дію: якщо вже лайкнуто - розлайкуємо, і навпаки
+            val action = if (currentVideo.isLiked) "decrement" else "increment"
+            val requestBody = mapOf("action" to action)
 
+            RetrofitClient.instance.toggleLike(currentVideo.id, requestBody).enqueue(object : retrofit2.Callback<Video> {
+                override fun onResponse(call: retrofit2.Call<Video>, response: retrofit2.Response<Video>) {
+                    if (response.isSuccessful) {
+                        // Сервер повернув оновлену кількість лайків
+                        val updateVideo = response.body()
+                        if(updateVideo!=null){
+                            currentVideo.isLiked = !currentVideo.isLiked
+                            currentVideo.likes = updateVideo.likes
+                        }
+                        
+                        // Оновлюємо текст кнопки
+                        holder.btnLike.text = if (currentVideo.isLiked) "❤️ ${currentVideo.likes}" else "🤍 ${currentVideo.likes}"
+                    }
+                }
+
+                override fun onFailure(call: retrofit2.Call<Video>, t: Throwable) {
+                    Toast.makeText(holder.itemView.context, "Помилка мережі", Toast.LENGTH_SHORT).show()
+                }
+            })
         }
+
         if(isAdmin){
             holder.btnDeleteVideo.visibility = View.VISIBLE
             holder.btnClearComments.visibility = View.VISIBLE
@@ -105,51 +116,85 @@ class VideoAdapter(
         }
 
         holder.btnDeleteVideo.setOnClickListener {
-            onVideoDelete(position)
+            val adapterPosition = holder.bindingAdapterPosition
+            if (adapterPosition != RecyclerView.NO_POSITION) {
+                onVideoDelete(adapterPosition)
+            }
         }
 
         holder.btnShare.setOnClickListener {
-            val userNames = mockUsers.map { it.name }.toTypedArray()
+            // Відфільтровуємо поточного юзера, щоб він не міг поділитися відео сам із собою
+            val availableUsers = allUsers.filter { it.name != currentUserName }
+            val userNames = availableUsers.map { it.name }.toTypedArray()
 
             val builder = AlertDialog.Builder(holder.itemView.context)
             builder.setTitle("Кому надіслати?")
+
             builder.setItems(userNames) { _, which ->
-                val selectedUser = mockUsers[which]
+                val selectedUser = availableUsers[which]
 
+                // 1. Формуємо дані точно так, як чекає твій Express-сервер
+                val requestBody = mapOf(
+                    "receiverId" to selectedUser.id,
+                    "senderName" to currentUserName
+                )
 
-                if (!currentVideo.sharedVideos.contains(selectedUser.id)) {
-                    currentVideo.sharedVideos.add(selectedUser.id)
-                }
+                // 2. Відправляємо запит на сервер
+                RetrofitClient.instance.shareVideo(currentVideo.id, requestBody).enqueue(object : retrofit2.Callback<Map<String, Any>> {
+                    override fun onResponse(call: retrofit2.Call<Map<String, Any>>, response: retrofit2.Response<Map<String, Any>>) {
+                        if (response.isSuccessful) {
+                            // Якщо сервер успішно додав запис
+                            val newShared = SharedVideo(receiverId = selectedUser.id, sharedBy = currentUserName)
+                            currentVideo.sharedvideos.add(newShared)
 
-                Toast.makeText(holder.itemView.context,
-                    "Відео '${currentVideo.name}' надіслано користувачу ${selectedUser.name}",
-                    Toast.LENGTH_SHORT).show()
+                            Toast.makeText(holder.itemView.context, "Відео надіслано користувачу ${selectedUser.name}", Toast.LENGTH_SHORT).show()
+                        } else {
+                            // Якщо сервер відповів помилкою 400 (Відео вже поділено)
+                            Toast.makeText(holder.itemView.context, "Ви вже поділилися цим відео з ${selectedUser.name}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+
+                    override fun onFailure(call: retrofit2.Call<Map<String, Any>>, t: Throwable) {
+                        Toast.makeText(holder.itemView.context, "Помилка мережі", Toast.LENGTH_SHORT).show()
+                    }
+                })
             }
             builder.show()
         }
 
         holder.btnSendComment.setOnClickListener {
-            val userInput = holder.editTextComment.text.toString()
+            val commentText = holder.editTextComment.text.toString()
+            if (commentText.isNotEmpty()) {
+                val requestBody = mapOf(
+                    "author" to mapOf("name" to currentUserName),
+                    "text" to commentText
+                )
 
-            if(userInput.isNotBlank()){
-                val formattedComment = "$currentUserName: $userInput"
-                currentVideo.comments.add(formattedComment)
-                holder.tvCommentsList.text = currentVideo.comments.joinToString("\n")
+                RetrofitClient.instance.addComment(currentVideo.id, requestBody).enqueue(object : retrofit2.Callback<Video> {
+                    override fun onResponse(call: retrofit2.Call<Video>, response: retrofit2.Response<Video>) {
+                        if (response.isSuccessful) {
+                            val newComment = Comment(author = currentUserName, text = commentText)
+                            currentVideo.comments.add(newComment)
+                            holder.tvCommentsList.text = currentVideo.comments.joinToString("\n") { "${it.author}: ${it.text}" }
+                            holder.editTextComment.text.clear()
+                            Toast.makeText(holder.itemView.context, "Коментар додано", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(holder.itemView.context, "Помилка сервера", Toast.LENGTH_SHORT).show()
+                        }
+                    }
 
-                holder.editTextComment.text.clear()
+                    override fun onFailure(call: retrofit2.Call<Video>, t: Throwable) {
+                        Toast.makeText(holder.itemView.context, "Помилка мережі", Toast.LENGTH_SHORT).show()
+                    }
+                })
+            } else {
+                Toast.makeText(holder.itemView.context, "Введіть текст коментаря", Toast.LENGTH_SHORT).show()
             }
-
-
         }
-
-
     }
 
     //повідомляє RecyclerView, скільки всього елементів у нас є
     override fun getItemCount(): Int {
         return videoList.size
-
     }
-
-
 }

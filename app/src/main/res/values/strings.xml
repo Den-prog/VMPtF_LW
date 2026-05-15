@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">LW_3</string>
+    <string name="header_format">Відеохостинг | %1$s (%2$s)</string>
 </resources>
