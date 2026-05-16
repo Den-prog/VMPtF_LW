@@ -13,6 +13,7 @@ data class Video (
 
     var likes: Int = 0,
     var isLiked: Boolean = false,
+    val likedBy: MutableList<Int> = mutableListOf(),
     val author: Int = 1
 )
 

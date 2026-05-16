@@ -66,6 +66,7 @@ class MainActivity : AppCompatActivity() {
         loadVideosFromServer()
         loadUsersFromServer()
 
+        // Увага: переконайся, що імпортував okhttp3.MediaType і RequestBody
         val videoPickerLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
             if (uri != null) {
                 val builder = android.app.AlertDialog.Builder(this)
@@ -77,36 +78,33 @@ class MainActivity : AppCompatActivity() {
                     val customName = input.text.toString()
                     val fileName = customName.ifBlank { "Відео без назви" }
 
-                    // Створюємо об'єкт відео для відправки на сервер
-                    val newVideo = Video(
-                        id = 0, // Сервер сам згенерує правильний ID
-                        name = fileName,
-                        url = uri.toString(),
-                        comments = mutableListOf(),
-                        sharedvideos = mutableListOf(),
-                        author = activeUser.id
-                    )
+                    // Читаємо байти файлу з URI
+                    val inputStream = contentResolver.openInputStream(uri)
+                    val fileBytes = inputStream?.readBytes()
 
-                    // НОВЕ: Відправляємо нове відео на сервер через Retrofit (POST-запит)
-                    RetrofitClient.instance.addVideo(newVideo).enqueue(object : Callback<Video> {
-                        override fun onResponse(call: Call<Video>, response: Response<Video>) {
-                            if (response.isSuccessful) {
-                                Toast.makeText(this@MainActivity, "Відео успішно завантажено!", Toast.LENGTH_SHORT).show()
-                                loadVideosFromServer() // Оновлюємо список з сервера
-                            } else {
-                                Toast.makeText(this@MainActivity, "Помилка при збереженні", Toast.LENGTH_SHORT).show()
+                    if (fileBytes != null) {
+                        // Створюємо Multipart частини для файлу та назви
+                        val requestFile = okhttp3.RequestBody.create(okhttp3.MediaType.parse("video/mp4"), fileBytes)
+                        val body = okhttp3.MultipartBody.Part.createFormData("videoFile", "upload.mp4", requestFile)
+                        val titleBody = okhttp3.RequestBody.create(okhttp3.MediaType.parse("text/plain"), fileName)
+
+                        RetrofitClient.instance.uploadVideo(body, titleBody).enqueue(object : Callback<Video> {
+                            override fun onResponse(call: Call<Video>, response: Response<Video>) {
+                                if (response.isSuccessful) {
+                                    Toast.makeText(this@MainActivity, "Відео успішно завантажено!", Toast.LENGTH_SHORT).show()
+                                    loadVideosFromServer()
+                                } else {
+                                    Toast.makeText(this@MainActivity, "Помилка при збереженні", Toast.LENGTH_SHORT).show()
+                                }
                             }
-                        }
 
-                        override fun onFailure(call: Call<Video>, t: Throwable) {
-                            Toast.makeText(this@MainActivity, "Помилка мережі: ${t.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    })
+                            override fun onFailure(call: Call<Video>, t: Throwable) {
+                                Toast.makeText(this@MainActivity, "Помилка мережі: ${t.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        })
+                    }
                 }
-
-                builder.setNegativeButton("Скасувати") { dialog, _ ->
-                    dialog.cancel()
-                }
+                builder.setNegativeButton("Скасувати") { dialog, _ -> dialog.cancel() }
                 builder.show()
             }
         }
@@ -123,18 +121,17 @@ class MainActivity : AppCompatActivity() {
                 if (response.isSuccessful) {
                     val videosFromServer = response.body()
                     if (videosFromServer != null) {
-                        myVideos.clear() // Очищаємо старі дані
-                        myVideos.addAll(videosFromServer) // Додаємо ті, що прийшли з сервера
-                        updateVideoList() // Перемальовуємо екран
+                        myVideos.clear()
+                        // Встановлюємо правильний статус лайку для поточного юзера
+                        videosFromServer.forEach { video ->
+                            video.isLiked = video.likedBy.contains(activeUser.id)
+                            myVideos.add(video)
+                        }
+                        updateVideoList()
                     }
-                } else {
-                    Toast.makeText(this@MainActivity, "Не вдалося отримати відео", Toast.LENGTH_SHORT).show()
                 }
             }
-
-            override fun onFailure(call: Call<List<Video>>, t: Throwable) {
-                Toast.makeText(this@MainActivity, "Помилка з'єднання з сервером", Toast.LENGTH_SHORT).show()
-            }
+            override fun onFailure(call: Call<List<Video>>, t: Throwable) {}
         })
     }
 
@@ -178,12 +175,21 @@ class MainActivity : AppCompatActivity() {
             myVideos.filter { it.id == 1 || it.author == activeUser.id || it.sharedvideos.any{shared -> shared.receiverId == activeUser.id} }.toMutableList()
         }
 
-        myAdapter = VideoAdapter(filteredVideos.toMutableList(), activeUser.name, activeUser.isAdmin, allUsers) { position ->
+        myAdapter = VideoAdapter(filteredVideos.toMutableList(), activeUser.name, activeUser.id, activeUser.isAdmin, allUsers) { position ->
             val videoToRemove = filteredVideos[position]
-            myVideos.remove(videoToRemove)
-            updateVideoList()
-        }
 
+            // Відправляємо запит на сервер
+            RetrofitClient.instance.deleteVideo(videoToRemove.id).enqueue(object : Callback<Void> {
+                override fun onResponse(call: Call<Void>, response: Response<Void>) {
+                    if (response.isSuccessful) {
+                        myVideos.remove(videoToRemove)
+                        updateVideoList()
+                        Toast.makeText(this@MainActivity, "Відео видалено на сервері", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                override fun onFailure(call: Call<Void>, t: Throwable) {}
+            })
+        }
         rvVideos.adapter = myAdapter
     }
 

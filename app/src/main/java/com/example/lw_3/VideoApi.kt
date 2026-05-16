@@ -1,10 +1,15 @@
 package com.example.lw_3
 
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Call
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 data class LoginResponse(
     val message: String,
@@ -46,6 +51,19 @@ interface VideoApi {
         @Path("id") id: Int,
         @Body body: @JvmSuppressWildcards Map<String, String>
     ): Call<Video>
+
+    @Multipart
+    @POST("videos/upload")
+    fun uploadVideo(
+        @Part videoFile: MultipartBody.Part,
+        @Part("title") title: RequestBody
+    ): Call<Video>
+
+    @DELETE("videos/{id}")
+    fun deleteVideo(@Path("id") id: Int): Call<Void>
+
+    @DELETE("videos/{videoId}/comments")
+    fun clearComments(@Path("videoId") videoId: Int): Call<Video>
 
 
 }

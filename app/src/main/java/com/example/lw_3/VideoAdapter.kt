@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.RecyclerView
 class VideoAdapter(
     private val videoList: MutableList<Video>,
     private val currentUserName: String,
+    private val currentUserId: Int,
     private val isAdmin: Boolean,
     private val allUsers: List<User>,
     private val onVideoDelete: (Int) -> Unit) : RecyclerView.Adapter<VideoAdapter.VideoViewHolder>() {
@@ -77,28 +78,21 @@ class VideoAdapter(
         holder.btnLike.text = if (currentVideo.isLiked) "❤️ ${currentVideo.likes}" else "🤍 ${currentVideo.likes}"
 
         holder.btnLike.setOnClickListener {
-            // Визначаємо дію: якщо вже лайкнуто - розлайкуємо, і навпаки
-            val action = if (currentVideo.isLiked) "decrement" else "increment"
-            val requestBody = mapOf("action" to action)
+            // Відправляємо серверу ID користувача, який натиснув лайк
+            val requestBody = mapOf("userId" to currentUserId.toString())
 
             RetrofitClient.instance.toggleLike(currentVideo.id, requestBody).enqueue(object : retrofit2.Callback<Video> {
                 override fun onResponse(call: retrofit2.Call<Video>, response: retrofit2.Response<Video>) {
                     if (response.isSuccessful) {
-                        // Сервер повернув оновлену кількість лайків
                         val updateVideo = response.body()
-                        if(updateVideo!=null){
+                        if(updateVideo != null) {
                             currentVideo.isLiked = !currentVideo.isLiked
                             currentVideo.likes = updateVideo.likes
+                            holder.btnLike.text = if (currentVideo.isLiked) "❤️ ${currentVideo.likes}" else "🤍 ${currentVideo.likes}"
                         }
-                        
-                        // Оновлюємо текст кнопки
-                        holder.btnLike.text = if (currentVideo.isLiked) "❤️ ${currentVideo.likes}" else "🤍 ${currentVideo.likes}"
                     }
                 }
-
-                override fun onFailure(call: retrofit2.Call<Video>, t: Throwable) {
-                    Toast.makeText(holder.itemView.context, "Помилка мережі", Toast.LENGTH_SHORT).show()
-                }
+                override fun onFailure(call: retrofit2.Call<Video>, t: Throwable) {}
             })
         }
 
@@ -110,9 +104,17 @@ class VideoAdapter(
             holder.btnDeleteVideo.visibility = View.GONE
             holder.btnClearComments.visibility = View.GONE
         }
+
         holder.btnClearComments.setOnClickListener {
-            currentVideo.comments.clear()
-            holder.tvCommentsList.text = "Немає коментарів"
+            RetrofitClient.instance.clearComments(currentVideo.id).enqueue(object : retrofit2.Callback<Video> {
+                override fun onResponse(call: retrofit2.Call<Video>, response: retrofit2.Response<Video>) {
+                    if (response.isSuccessful) {
+                        currentVideo.comments.clear()
+                        holder.tvCommentsList.text = "Немає коментарів"
+                    }
+                }
+                override fun onFailure(call: retrofit2.Call<Video>, t: Throwable) {}
+            })
         }
 
         holder.btnDeleteVideo.setOnClickListener {
