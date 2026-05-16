@@ -31,7 +31,9 @@ router.post('/upload', upload.single('videoFile'), (req, res) => {
         name: newVideoTitle,
         url: `http://localhost:5000/${req.file.filename}`, 
         comments: [], 
-        sharedvideos: []
+        sharedvideos: [],
+        likes: 0,
+        likedBy: []
     };
 
 
@@ -45,21 +47,59 @@ router.post('/upload', upload.single('videoFile'), (req, res) => {
 const videolist = [
     { id: 1, name: "Відео про природу", url: "http://localhost:5000/nature.mp4", 
         comments: [{ text: " Дуже гарне відео!", author: "Олексій (admin)" }],
-        sharedvideos: []
+        sharedvideos: [],
+        likes: 0,
+        likedBy: []
     },
     {
         id: 2, name: "Michael Jackson - Billie Jean (Official Video)",
         url: "http://localhost:5000/Michael%20Jackson%20-%20Billie%20Jean%20(Official%20Video).mp4", 
         comments: [{ text: " Класика поп музики!", author: "Дмитро (user)" }],
-        sharedvideos: []
+        sharedvideos: [],
+        likes: 0,
+        likedBy: []
     }
 
 ];
 
 const users = [
-    { id: 1, name: "Олексій (admin)", role: "admin", password: "12345" },
-    { id: 2, name: "Дмитро (user)", role: "user", password: "qwerty" }
+    { id: 1, name: "Олексій", role: "admin", password: "12345" },//admin
+    { id: 2, name: "Дмитро", role: "user", password: "qwerty" }//user
 ]
+
+router.patch('/:id/like', (req, res) => {
+    const videoId = parseInt(req.params.id);
+   const action = req.body.action;
+    const userId = req.body.userId ? parseInt(req.body.userId) : null;
+
+    const video = videolist.find(v => v.id === videoId);
+
+    if (!video) {
+        return res.status(404).json({ message: "Відео не знайдено" });
+    }
+
+    if (userId != null) {
+        const hasLiked = video.likedBy.includes(userId);
+
+        if (hasLiked) {
+            video.likedBy = video.likedBy.filter(id => id !== userId);
+            if (video.likes > 0) video.likes -= 1;
+        } else {
+            video.likedBy.push(userId);
+            video.likes += 1;
+        }
+
+        return res.json(video);
+    }
+
+    if (action === 'increment') {
+        video.likes += 1;
+    } else if (action === 'decrement' && video.likes > 0) {
+        video.likes -= 1;
+    }
+
+    res.json(video);
+})
 
 router.post('/register', (req, res) => {
     const {name, password} = req.body;
@@ -170,5 +210,34 @@ router.delete('/:videoId/comments/:commentIndex', (req, res) => {
         res.status(404).send("Коментар не знайдено");
     }
 });
+
+//Маршрут для видалення відео (Адмін)
+router.delete('/:id', (req, res) => {
+    const videoId = parseInt(req.params.id);
+    const index = videolist.findIndex(v => v.id === videoId);
+    
+    if (index !== -1) {
+        videolist.splice(index, 1);
+        res.json({ message: "Відео видалено" });
+    } else {
+        res.status(404).json({ message: "Відео не знайдено" });
+    }
+});
+
+// Маршрут для повного очищення коментарів (Адмін)
+router.delete('/:videoId/comments', (req, res) => {
+    const videoId = parseInt(req.params.videoId);
+    const video = videolist.find(v => v.id === videoId);
+    
+    if (video) {
+        video.comments = [];
+        res.json(video);
+    } else {
+        res.status(404).json({ message: "Відео не знайдено" });
+    }
+});
+
+
+
 
 module.exports = router;

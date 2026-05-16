@@ -14,6 +14,7 @@ function App() {
   const [authMode, setAuthMode] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [likedVideos, setLikedVideos] = useState({});
 
 
   const handleAuth = () => {
@@ -178,6 +179,34 @@ function App() {
       .catch(error => console.error("Помилка: ", error));
   }, []);
 
+
+  const toggleLike = (videoId) => {
+    if (!currentUser?.id) return;
+
+    fetch(`http://localhost:5000/videos/${videoId}/like`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: currentUser.id })
+    })
+      .then(res => res.json())
+      .then(updatedVideo => {
+        const newVideos = videos.map(v => v.id === videoId ? updatedVideo : v);
+        setVideos(newVideos);
+      })
+      .catch(err => console.error(err));
+  };
+
+  useEffect(() => {
+    if (!currentUser?.id || videos.length === 0) return;
+
+    const liked = {};
+    videos.forEach(video => {
+      liked[video.id] = video.likedBy?.includes(currentUser.id);
+    });
+    setLikedVideos(liked);
+  }, [videos, currentUser]);
+
+
   //достаємо тільки ті відео якими поділилися з поточним користувачем
   const sharedVideos = videos.filter(video =>
     video.sharedvideos && video.sharedvideos.some(share => share.receiverId === currentUser?.id)
@@ -256,6 +285,15 @@ function App() {
                     Поділитись
                   </button>
 
+                  <div className="like-section">
+                    <button
+                      onClick={() => toggleLike(video.id)}
+                      style={{ color: likedVideos[video.id] ? 'red' : 'black' }}
+                    >
+                      {likedVideos[video.id] ? '❤️' : '🤍'} {video.likes}
+                    </button>
+                  </div>
+
                   <div className="comment">
                     <h4>Коментарі:</h4>
                     {video.comments?.map((comment, index) => (
@@ -296,6 +334,15 @@ function App() {
                       </p>
                     ))}
 
+                    <div className="like-section">
+                      <button
+                        onClick={() => toggleLike(video.id)}
+                        style={{ color: likedVideos[video.id] ? 'red' : 'black' }}
+                      >
+                        {likedVideos[video.id] ? '❤️' : '🤍'} {video.likes}
+                      </button>
+                    </div>
+
                     <input type="text" placeholder='Написати коментар...' value={newComments[video.id] || ''}
                       onChange={(e) => handleCommentChange(video.id, e.target.value)}>
                     </input>
@@ -306,7 +353,7 @@ function App() {
               ))}
             </div>
           )}
-        
+
         </>
       )}
 
