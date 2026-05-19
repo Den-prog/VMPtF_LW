@@ -50,7 +50,15 @@ class VideoAdapter(
     override fun onBindViewHolder(holder: VideoViewHolder, position: Int) {
         val currentVideo = videoList[position]
         holder.tvCommentsList.text = if (currentVideo.comments.isEmpty()) "Немає коментарів" else currentVideo.comments.joinToString("\n") { "${it.author}: ${it.text}" }
-        holder.txtVideoTitle.text = currentVideo.name
+
+        val shareData = currentVideo.sharedvideos.find{it.receiverId == currentUserId}
+
+        if(shareData!= null){
+            holder.txtVideoTitle.text = "${currentVideo.name}\nПоділено від: ${shareData.sharedBy}"
+        }
+        else{
+            holder.txtVideoTitle.text = currentVideo.name
+        }
 
         val fixedUrl = currentVideo.url.replace("localhost", "10.0.2.2")
         val videoUri = fixedUrl.toUri()

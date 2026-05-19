@@ -31,6 +31,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rvVideos: RecyclerView
     private lateinit var tvHeader: TextView
 
+    private var adminSwitch: SwitchCompat? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -45,28 +47,28 @@ class MainActivity : AppCompatActivity() {
         rvVideos = findViewById(R.id.rvVideos)
         rvVideos.layoutManager = LinearLayoutManager(this)
         tvHeader = findViewById(R.id.textView)
+        adminSwitch = findViewById(R.id.switchIsAdmin)
+        adminSwitch?.isClickable = false
 
-        val loginName = intent.getStringExtra("USER_NAME") ?: "Денис"
+        // Отримуємо дані користувача, який РЕАЛЬНО увійшов через екран авторизації
+        val loginName = intent.getStringExtra("USER_NAME") ?: "Unknown_user"
         val loginIsAdmin = intent.getBooleanExtra("IS_ADMIN", false)
+        val loginId = intent.getIntExtra("USER_ID", 1)
 
-        allUsers = mutableListOf(
-            User(id = 1, name = loginName, role = if (loginIsAdmin) "admin" else "user"),
-            User(id = 2, name = "Костя", role = "user"),
-            User(id = 3, name = "Марія", role = "user")
-        )
-        activeUser = allUsers[0]
+        // Створюємо об'єкт поточного активного користувача
+        activeUser = User(id = loginId, name = loginName, role = if (loginIsAdmin) "admin" else "user")
 
-        // НОВЕ: Обов'язково ініціалізуємо порожній список перед завантаженням з мережі,
-        // щоб програма не впала з помилкою UninitializedPropertyAccessException
+        // Ініціалізуємо порожні списки
+        allUsers = mutableListOf()
         myVideos = mutableListOf()
 
-        setupDeveloperPanel()
+        // Відображаємо початковий стан адмін-панелі
+        updateAdminViews()
 
-        // НОВЕ: Завантажуємо відео з нашого Express сервера замість локальних
+        // Завантажуємо дані з нашого Express сервера
         loadVideosFromServer()
         loadUsersFromServer()
 
-        // Увага: переконайся, що імпортував okhttp3.MediaType і RequestBody
         val videoPickerLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
             if (uri != null) {
                 val builder = android.app.AlertDialog.Builder(this)
@@ -169,11 +171,8 @@ class MainActivity : AppCompatActivity() {
         val roleText = if (activeUser.isAdmin) "Адмін" else "Користувач"
         tvHeader.text = getString(R.string.header_format, activeUser.name, roleText)
 
-        val filteredVideos = if (activeUser.isAdmin) {
-            myVideos
-        } else {
-            myVideos.filter { it.id == 1 || it.author == activeUser.id || it.sharedvideos.any{shared -> shared.receiverId == activeUser.id} }.toMutableList()
-        }
+        val filteredVideos = myVideos
+
 
         myAdapter = VideoAdapter(filteredVideos.toMutableList(), activeUser.name, activeUser.id, activeUser.isAdmin, allUsers) { position ->
             val videoToRemove = filteredVideos[position]
@@ -201,11 +200,30 @@ class MainActivity : AppCompatActivity() {
                     if (usersFromServer != null) {
                         allUsers.clear()
                         allUsers.addAll(usersFromServer)
-                        setupDeveloperPanel() 
+
+                        // Синхронізуємо activeUser з базою даних сервера за іменем, щоб підтягнути правильний ID
+                        val serverSelf = allUsers.find { it.name == activeUser.name }
+                        if (serverSelf != null) {
+                            activeUser = serverSelf
+                        }
+
+                        updateAdminViews()
+                        updateVideoList()
                     }
                 }
             }
             override fun onFailure(call: Call<List<User>>, t: Throwable) {}
         })
+    }
+
+    // Новий чистий метод керування видимістю адмін-елементів
+    private fun updateAdminViews() {
+        if (activeUser.isAdmin) {
+            adminSwitch?.visibility = View.VISIBLE
+            adminSwitch?.isChecked = true
+        } else {
+            adminSwitch?.visibility = View.GONE
+            adminSwitch?.isChecked = false
+        }
     }
 }
