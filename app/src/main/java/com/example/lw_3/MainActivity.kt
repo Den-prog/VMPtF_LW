@@ -27,7 +27,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var activeUser: User
     private lateinit var allUsers: MutableList<User>
 
-    // UI елементи
+    //UI елементи
     private lateinit var rvVideos: RecyclerView
     private lateinit var tvHeader: TextView
 
@@ -50,22 +50,23 @@ class MainActivity : AppCompatActivity() {
         adminSwitch = findViewById(R.id.switchIsAdmin)
         adminSwitch?.isClickable = false
 
-        // Отримуємо дані користувача, який РЕАЛЬНО увійшов через екран авторизації
+
+        //отримання даних користувача, який дійсно увійшов через екран авторизації
         val loginName = intent.getStringExtra("USER_NAME") ?: "Unknown_user"
         val loginIsAdmin = intent.getBooleanExtra("IS_ADMIN", false)
         val loginId = intent.getIntExtra("USER_ID", 1)
 
-        // Створюємо об'єкт поточного активного користувача
+        //створення об'єкта поточного активного користувача
         activeUser = User(id = loginId, name = loginName, role = if (loginIsAdmin) "admin" else "user")
 
-        // Ініціалізуємо порожні списки
+
         allUsers = mutableListOf()
         myVideos = mutableListOf()
 
-        // Відображаємо початковий стан адмін-панелі
+        //відображення початкового стану адмін-панелі
         updateAdminViews()
 
-        // Завантажуємо дані з нашого Express сервера
+        //завантаження даних з нашого Express сервера
         loadVideosFromServer()
         loadUsersFromServer()
 
@@ -80,12 +81,12 @@ class MainActivity : AppCompatActivity() {
                     val customName = input.text.toString()
                     val fileName = customName.ifBlank { "Відео без назви" }
 
-                    // Читаємо байти файлу з URI
+                    //читаємо файл з URI
                     val inputStream = contentResolver.openInputStream(uri)
                     val fileBytes = inputStream?.readBytes()
 
                     if (fileBytes != null) {
-                        // Створюємо Multipart частини для файлу та назви
+                        //створення Multipart частини для файлу та назви
                         val requestFile = okhttp3.RequestBody.create(okhttp3.MediaType.parse("video/mp4"), fileBytes)
                         val body = okhttp3.MultipartBody.Part.createFormData("videoFile", "upload.mp4", requestFile)
                         val titleBody = okhttp3.RequestBody.create(okhttp3.MediaType.parse("text/plain"), fileName)
@@ -116,7 +117,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // НОВЕ: Метод для отримання відео з Express.js (GET-запит)
+    //метод для отримання відео з Express (GET-запит)
     private fun loadVideosFromServer() {
         RetrofitClient.instance.getVideos().enqueue(object : Callback<List<Video>> {
             override fun onResponse(call: Call<List<Video>>, response: Response<List<Video>>) {
@@ -124,7 +125,6 @@ class MainActivity : AppCompatActivity() {
                     val videosFromServer = response.body()
                     if (videosFromServer != null) {
                         myVideos.clear()
-                        // Встановлюємо правильний статус лайку для поточного юзера
                         videosFromServer.forEach { video ->
                             video.isLiked = video.likedBy.contains(activeUser.id)
                             myVideos.add(video)
@@ -201,7 +201,7 @@ class MainActivity : AppCompatActivity() {
                         allUsers.clear()
                         allUsers.addAll(usersFromServer)
 
-                        // Синхронізуємо activeUser з базою даних сервера за іменем, щоб підтягнути правильний ID
+                        //синхронізація activeUser з базою даних сервера за іменем, щоб підтягнути правильний ID
                         val serverSelf = allUsers.find { it.name == activeUser.name }
                         if (serverSelf != null) {
                             activeUser = serverSelf
@@ -216,7 +216,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Новий чистий метод керування видимістю адмін-елементів
+    //метод керування видимістю адмін-елементів
     private fun updateAdminViews() {
         if (activeUser.isAdmin) {
             adminSwitch?.visibility = View.VISIBLE

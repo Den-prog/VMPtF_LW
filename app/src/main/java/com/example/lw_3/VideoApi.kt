@@ -16,42 +16,48 @@ data class LoginResponse(
     val user: User,
 )
 interface VideoApi {
-    // GET-запит для отримання списку всіх відео
+    //отримання списку всіх відео
     @GET("videos")
     fun getVideos(): Call<List<Video>>
 
-    // POST-запит для завантаження нового відео на сервер
+    //запит для завантаження нового відео на сервер
     @POST("videos/upload")
     fun addVideo(@Body video: Video): Call<Video>
 
+    //запит на додавання коментарів під конкретне відео
     @POST("videos/{videoId}/comments")
     fun addComment(
         @Path("videoId") videoId: Int,
         @Body body: @JvmSuppressWildcards Map<String, Any>
     ): Call<Video>
 
+    //отримання користувача
     @GET("videos/users")
     fun getUsers(): Call<List<User>>
 
+    //запит на логін
     @POST("videos/login")
     fun login(@Body credentials: Map<String, String>): Call<LoginResponse>
 
+    //запит на регістрацію
     @POST("videos/register")
     fun register(@Body credentials: Map<String, String>): Call<LoginResponse>
 
-
+    //запит на шерінг відео
     @POST("videos/{videoId}/share")
     fun shareVideo(
         @Path("videoId") videoId: Int,
         @Body body: @JvmSuppressWildcards Map<String, Any>
     ): Call<Map<String, Any>>
 
+    //щоб ставити лайки
     @PATCH("videos/{id}/like")
     fun toggleLike(
         @Path("id") id: Int,
         @Body body: @JvmSuppressWildcards Map<String, String>
     ): Call<Video>
 
+    //завантажувати відео
     @Multipart
     @POST("videos/upload")
     fun uploadVideo(
@@ -59,9 +65,11 @@ interface VideoApi {
         @Part("title") title: RequestBody
     ): Call<Video>
 
+    //видалення відео
     @DELETE("videos/{id}")
     fun deleteVideo(@Path("id") id: Int): Call<Void>
 
+    //видалення коментарів
     @DELETE("videos/{videoId}/comments")
     fun clearComments(@Path("videoId") videoId: Int): Call<Video>
 
