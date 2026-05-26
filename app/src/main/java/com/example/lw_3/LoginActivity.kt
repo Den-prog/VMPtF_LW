@@ -36,7 +36,7 @@ class LoginActivity : AppCompatActivity() {
             val password = etPassword.text.toString().trim()
 
             if(name.isNotBlank() && password.isNotBlank()) {
-                val credentials = mapOf("name" to name, "password" to password)
+                val credentials = mapOf("name" to name, "password" to password)//створення словника
 
                 RetrofitClient.instance.login(credentials).enqueue(object :
                     Callback<LoginResponse> {
@@ -68,19 +68,15 @@ class LoginActivity : AppCompatActivity() {
             val password = etPassword.text.toString().trim()
 
             if (name.isNotBlank() && password.isNotBlank()) {
-                // Формуємо дані для відправки (як очікує Express)
+                //формування даних для відправки (як очікує Express)
                 val credentials = mapOf("name" to name, "password" to password)
 
-                // Робимо POST-запит на маршрут register
                 RetrofitClient.instance.register(credentials).enqueue(object : Callback<LoginResponse> {
                     override fun onResponse(call: Call<LoginResponse>, response: Response<LoginResponse>) {
                         if (response.isSuccessful) {
-                            // Реєстрація успішна! Express повернув нам створеного юзера
                             val user = response.body()?.user
                             if (user != null) {
                                 Toast.makeText(this@LoginActivity, "Реєстрація успішна!", Toast.LENGTH_SHORT).show()
-
-                                // Одразу пускаємо його в додаток
                                 val intent = Intent(this@LoginActivity, MainActivity::class.java).apply {
                                     putExtra("USER_NAME", user.name)
                                     putExtra("IS_ADMIN", user.isAdmin)
@@ -90,7 +86,6 @@ class LoginActivity : AppCompatActivity() {
                                 finish()
                             }
                         } else {
-                            // Сервер повернув статус 400 (Користувач вже існує)
                             Toast.makeText(this@LoginActivity, "Користувач з таким ім'ям вже існує", Toast.LENGTH_SHORT).show()
                         }
                     }

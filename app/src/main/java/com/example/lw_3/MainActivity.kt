@@ -137,35 +137,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    private fun setupDeveloperPanel() {
-        val spinner: Spinner? = findViewById(R.id.spinnerUserSelect)
-        val adminSwitch: SwitchCompat? = findViewById(R.id.switchIsAdmin)
 
-        if (spinner != null && adminSwitch != null) {
-
-            val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, allUsers.map { it.name })
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            spinner.adapter = adapter
-            adminSwitch.isClickable = false
-
-            spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                    activeUser = allUsers[position]
-                    if(activeUser.isAdmin){
-                        adminSwitch.visibility = View.VISIBLE
-                        adminSwitch.isChecked = true
-                    } else {
-                        adminSwitch.visibility = View.GONE
-                        adminSwitch.isChecked = false
-                    }
-                    updateVideoList()
-                }
-                override fun onNothingSelected(parent: AdapterView<*>?) {}
-            }
-        } else {
-            updateVideoList()
-        }
-    }
 
     private fun updateVideoList() {
         val roleText = if (activeUser.isAdmin) "Адмін" else "Користувач"
@@ -177,7 +149,7 @@ class MainActivity : AppCompatActivity() {
         myAdapter = VideoAdapter(filteredVideos.toMutableList(), activeUser.name, activeUser.id, activeUser.isAdmin, allUsers) { position ->
             val videoToRemove = filteredVideos[position]
 
-            // Відправляємо запит на сервер
+            // запит на сервер
             RetrofitClient.instance.deleteVideo(videoToRemove.id).enqueue(object : Callback<Void> {
                 override fun onResponse(call: Call<Void>, response: Response<Void>) {
                     if (response.isSuccessful) {

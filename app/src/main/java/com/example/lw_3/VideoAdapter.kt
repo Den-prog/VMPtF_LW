@@ -13,12 +13,12 @@ import androidx.core.net.toUri
 import androidx.recyclerview.widget.RecyclerView
 
 class VideoAdapter(
-    private val videoList: MutableList<Video>,
+    private val videoList: MutableList<Video>,//список відео для відображення
     private val currentUserName: String,
     private val currentUserId: Int,
     private val isAdmin: Boolean,
-    private val allUsers: List<User>,
-    private val onVideoDelete: (Int) -> Unit) : RecyclerView.Adapter<VideoAdapter.VideoViewHolder>() {
+    private val allUsers: List<User>,//просто список всіх юзерів
+    private val onVideoDelete: (Int) -> Unit) : RecyclerView.Adapter<VideoAdapter.VideoViewHolder>() {//колбек функція для видалення
 
 
     class VideoViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -82,11 +82,11 @@ class VideoAdapter(
         }
 
  
-        // Відображаємо поточну кількість лайків на кнопці
+
         holder.btnLike.text = if (currentVideo.isLiked) "❤️ ${currentVideo.likes}" else "🤍 ${currentVideo.likes}"
 
         holder.btnLike.setOnClickListener {
-            // Відправляємо серверу ID користувача, який натиснув лайк
+            //відправляємо серверу ID користувача, який натиснув лайк
             val requestBody = mapOf("userId" to currentUserId.toString())
 
             RetrofitClient.instance.toggleLike(currentVideo.id, requestBody).enqueue(object : retrofit2.Callback<Video> {
@@ -133,7 +133,7 @@ class VideoAdapter(
         }
 
         holder.btnShare.setOnClickListener {
-            // Відфільтровуємо поточного юзера, щоб він не міг поділитися відео сам із собою
+            //відфільтровуємо поточного юзера, щоб він не міг поділитися відео сам із собою
             val availableUsers = allUsers.filter { it.name != currentUserName }
             val userNames = availableUsers.map { it.name }.toTypedArray()
 
@@ -143,23 +143,20 @@ class VideoAdapter(
             builder.setItems(userNames) { _, which ->
                 val selectedUser = availableUsers[which]
 
-                // 1. Формуємо дані точно так, як чекає твій Express-сервер
                 val requestBody = mapOf(
                     "receiverId" to selectedUser.id,
                     "senderName" to currentUserName
                 )
 
-                // 2. Відправляємо запит на сервер
                 RetrofitClient.instance.shareVideo(currentVideo.id, requestBody).enqueue(object : retrofit2.Callback<Map<String, Any>> {
                     override fun onResponse(call: retrofit2.Call<Map<String, Any>>, response: retrofit2.Response<Map<String, Any>>) {
                         if (response.isSuccessful) {
-                            // Якщо сервер успішно додав запис
                             val newShared = SharedVideo(receiverId = selectedUser.id, sharedBy = currentUserName)
                             currentVideo.sharedvideos.add(newShared)
 
                             Toast.makeText(holder.itemView.context, "Відео надіслано користувачу ${selectedUser.name}", Toast.LENGTH_SHORT).show()
                         } else {
-                            // Якщо сервер відповів помилкою 400 (Відео вже поділено)
+
                             Toast.makeText(holder.itemView.context, "Ви вже поділилися цим відео з ${selectedUser.name}", Toast.LENGTH_SHORT).show()
                         }
                     }
