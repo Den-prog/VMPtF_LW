@@ -107,8 +107,9 @@ router.post('/register', (req, res) => {
     const userExists = users.find(u => u.name === name);
     if(userExists) return res.status(400).json({message: "Користувач вже існує!"});
 
+    const newUserId = users.length > 0 ? users[users.length - 1].id + 1 : 1;
     const newUser = {
-        id: users.length - 1,
+        id: newUserId,
         name: name,
         role: "user",
         password: password
@@ -211,7 +212,7 @@ router.delete('/:videoId/comments/:commentIndex', (req, res) => {
     }
 });
 
-//Маршрут для видалення відео (Адмін)
+//маршрут для видалення відео (Адмін)
 router.delete('/:id', (req, res) => {
     const videoId = parseInt(req.params.id);
     const index = videolist.findIndex(v => v.id === videoId);
@@ -224,7 +225,7 @@ router.delete('/:id', (req, res) => {
     }
 });
 
-// Маршрут для повного очищення коментарів (Адмін)
+//маршрут для повного очищення коментарів (Адмін)
 router.delete('/:videoId/comments', (req, res) => {
     const videoId = parseInt(req.params.videoId);
     const video = videolist.find(v => v.id === videoId);
